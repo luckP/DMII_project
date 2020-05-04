@@ -1,6 +1,6 @@
 ---
 title: "DMII"
-author: "Ana Catarina Monteiro, Artur Ferreira,Lucas Parada"
+author: "Ana Catarina Monteiro, Artur Ferreira, Lucas Parada"
 date: "4/25/2020"
 output: html_document
 

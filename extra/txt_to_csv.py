@@ -21,8 +21,8 @@ def main():
     # transform html characters into normal ones
     df['moviename'] = df['moviename'].apply(lambda x : html.unescape(x)) 
     
-    df.to_csv(dest_dir / 'movie.csv', index=False)
-    print(dest_dir / 'movie.csv')
+    df.to_csv(dest_dir / 'movies.csv', index=False)
+    print(dest_dir / 'movies.csv')
 
     
     # the ratings file, turn to UTF-8
@@ -37,8 +37,8 @@ def main():
     df['age'] = df['age'].apply(lambda x : str_to_int(x))
     df['profileview'] = df['profileview'].apply(lambda x : str_to_int(x))
     
-    df.to_csv(dest_dir / 'profile.csv', index=False)
-    print(dest_dir / 'profile.csv')
+    df.to_csv(dest_dir / 'profiles.csv', index=False)
+    print(dest_dir / 'profiles.csv')
 
     print('Done')
 

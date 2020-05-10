@@ -6,15 +6,6 @@ output: html_document
 
 
 ---
-```{python}
-# movie = pd.read_csv('data/movie.txt', sep='\\', encoding='windows-1252')
-# movie['moviename'] = movie['moviename,movieid'].str.split(pat=',').str[:-1]
-# 
-# movie['moviename'] = movie['moviename'].apply(lambda x: ','.join(x))
-# movie['moviename'] = movie['moviename,movieid'].str.split(pat=',').str[:-1]
-# movie['moviename'] = movie['moviename'].apply(lambda x: ','.join(x))
-# movie[['movieid', 'moviename']].to_csv('data/movie.csv')
-```
 
 
 ```{r setup, include=FALSE}

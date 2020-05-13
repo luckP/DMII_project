@@ -13,6 +13,9 @@ library(dplyr)
 library(ggplot2)
 library(gridExtra)
 library(recommenderlab)
+
+library(arules)
+library(arulesViz)
 ```
 
 
@@ -20,6 +23,7 @@ library(recommenderlab)
 movies <- read.csv('data/movies.csv')
 profiles <- read.csv('data/profiles.csv')
 #ratings <- read.csv('data/ratings.csv') 
+#ratings2 = ratings
 ratings <- ratings2
 ```
 
@@ -38,7 +42,7 @@ Podemos tirar três conclusões no que toca à idade:
   Grande parte dos utilizadores usa regularmente o serviço
   As idades correspondem em grande parte a uma faixa mais jovem. 
 No entanto existem idades impróvaveis.
-Portanto vamos resolver isso ao categorizar a variável "age", sendo que as categorias são de 10 em 10
+Portanto vamos resolver isso ao categorizar a variável "age", sendo que as categorias são de 5 em 5
 Não apenas isso mas também iremos considerar que as idades acima do 3º quartil 
 são desconhecidas, visto que há poucas
 
@@ -211,11 +215,14 @@ getModel(pop_model)
 
 ```
 
+
+
 ```{r}
 
 # busca das classificações do userid 11
-user <- filter(ratings, userid == 11)$movieid
-
+user_movies <- filter(ratings, userid == 1049494)$movieid
+#alteramos o user para uma lista de strings
+user_movies <- as.character(user)[21:26]
 
 # converter para uma linha
 activeuser <- matrix(0 , 1, ncol=length(unique(movies$movieid)), 
@@ -223,18 +230,100 @@ activeuser <- matrix(0 , 1, ncol=length(unique(movies$movieid)),
                                      as.character(sort(unique(movies$movieid)))))
 
 # mudar as classificaçoes para 1
-activeuser[1, user] <- 1
+activeuser[1, user_movies] <- 1
  
 # mudar para binary...
 aubm <- as(activeuser, 'binaryRatingMatrix')
 
 #prever
-predict(pop_model, aubm, n=10)
+#predict(pop_model, aubm, n=10)
 
 #guardar
-recs <- predict(pop_model, aubm, n=10)
+recs <- predict(pop_model, aubm, n=20)
 
 #imprimir
 getList(recs)
 ```
+
+```{r}
+getRatingMatrix(bm)
+
+inspect(getRatingMatrix(bm))
+
+
+```
+
+
+
+```{r}
+
+param = list(supp = 0.03, conf = 0.7, maxlen = 10)
+
+ar_model <- Recommender(bm, "AR", param)
+
+
+```
+
+```{r}
+# busca das classificações do userid 11
+user_movies <- filter(ratings, userid == 103006)$movieid
+
+user_movies <- as.character(user)[15:25]
+
+# converter para uma linha
+activeuser <- matrix(0 , 1, ncol=length(unique(movies$movieid)), 
+                     dimnames = list(" ",
+                                     as.character(sort(unique(movies$movieid)))))
+
+# mudar as classificaçoes para 1
+activeuser[1, user_movies] <- 1
+ 
+# mudar para binary...
+aubm <- as(activeuser, 'binaryRatingMatrix')
+
+#prever
+#predict(ar_model, aubm, n=10)
+
+#guardar
+recs <- predict(ar_model, aubm, n=20)
+
+#imprimir
+getList(recs)
+
+
+getModel(ar_model)
+
+
+
+```
+
+
+```{r}
+rules <- getModel(ar_model)$rule_base
+inspect(rules)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

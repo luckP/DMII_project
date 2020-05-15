@@ -257,29 +257,34 @@ ggplot(profiles, aes(agegroup)) +
 
 
 ```{r}
-bm <- as(train,"binaryRatingMatrix")
+bm <- as(ratings,"binaryRatingMatrix")
 #bm <- as(filter(ratings, year == 2009),"binaryRatingMatrix")
 #es <- evaluationScheme(bm, method="split", train=0.95, given=1)
 
-param <- list(supp = 0.03, conf = 0.7, maxlen = 5)
+#param <- list(supp = 0.03, conf = 0.7, maxlen = 5)
 
-models <- list(
-  pop_model = list(name = "POPULAR"),
-  ar_model = list(name = "AR", param = param))
+#models <- list(
+  #pop_model = list(name = "POPULAR"),
+  #ar_model = list(name = "AR", param = param))
 
 
 ```
 
 ```{r}
-#pop_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% users_train ,], "POPULAR")
-pop_model <- Recommender(getData(es, "train"), "POPULAR")
-getModel(pop_model)
+pop_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% train$userid ,], "POPULAR")
+#pop_model <- Recommender(getData(es, "train"), "POPULAR")
+#getModel(pop_model)
 ```
 
 ```{r}
-pop_model <- Recommender(as(train,"binaryRatingMatrix"), "POPULAR")
-recs <- predict(pop_model, as(test, "binaryRatingMatrix") , type="topNList", n=2)
-calcPredictionAccuracy(recs, getData(es, "unknown"), given=2)
+#pop_model <- Recommender(as(train,"binaryRatingMatrix"), "POPULAR")
+recs <- predict(pop_model, 
+                sample(bm[ bm@data@itemsetInfo$itemsetID %in% test$userid ,],1000),
+                type="topNList", 
+                n=2)
+calcPredictionAccuracy(recs, 
+                       sample(bm[ bm@data@itemsetInfo$itemsetID %in% test$userid ,],1000),
+                       given=2)
 ```
 
 

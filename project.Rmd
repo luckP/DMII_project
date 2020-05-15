@@ -15,15 +15,16 @@ library(gridExtra)
 library(recommenderlab)
 library(scales)
 library(caTools)
+setwd("DMII_project")
 ```
 
 
 ```{r 2}
 movies <- read.csv('data/movies.csv')
 profiles <- read.csv('data/profiles.csv')
-ratings <- read.csv('data/ratings.csv') 
-ratings2 = ratings
-#ratings <- ratings2
+#ratings <- read.csv('data/ratings.csv') 
+#ratings2 = ratings
+ratings <- ratings2
 ```
 
 Vamos observar as variáveis relevantes da tabela profiles
@@ -31,6 +32,7 @@ Vamos observar as variáveis relevantes da tabela profiles
 ```{r 3}
 profiles$gender[profiles$gender == ""] <- "Unknown"
 profiles$gender <- as.factor(profiles$gender)
+
 
 summary(profiles)
 ```
@@ -120,10 +122,23 @@ ggplot(filter(num_users_by_num_ratings, n < 2000 & n > 1), aes(n, nn)) +
 ```
 
 
+
+```{r}
+
+ratings['date'] <- as.Date(ratings$date)
+ratings <- filter(ratings, date >= "2006-01-20")
+
+print(summary(ratings))
+nrow(ratings)
+```
+
 Filtrar os utilizadores dos ratings com menos de 2000 ratings e pelo menos 1. 
 Atualizar os ratings a partir dos utilizadores validos e que deram rating superior a 3
+
 ```{r}
+
 valid_users <- filter(num_ratings_by_users,n<200 & n>5)$userid
+
 ratings <- filter(ratings, userid %in% valid_users)
 
 #ratings <- filter(ratings, rating >= 3)
@@ -131,6 +146,7 @@ ratings <- filter(ratings, userid %in% valid_users)
 rm(valid_users,num_ratings_by_users,num_users_by_num_ratings)
 
 ```
+
 
 
 ```{r 8}
@@ -156,7 +172,7 @@ rm(users_prof,c_users_prof,users_rat,c_users_rat)
 ```
 
 ```{r}
-ratings <- filter(ratings, userid %in% profiles$userid)
+#ratings <- filter(ratings, userid %in% profiles$userid) %>% mutate(year = substr(date, 1, 4))
 ```
 
 
@@ -165,11 +181,12 @@ ratings <- filter(ratings, userid %in% profiles$userid)
 #mask = sample.split(profiles$gender, SplitRatio=0.7)
 #profiles_train = profiles[ mask,]
 #profiles_test  = profiles[!mask,]
-u_ratings_count <- ratings %>% count(userid)
-u_ratings_count <- u_ratings_count %>% mutate(test = n>5 & n<=10)
-users_train = filter(u_ratings_count, test==FALSE)$userid
-users_test = filter(u_ratings_count, test==TRUE)$userid
-
+# u_ratings_count <- ratings %>% count(userid)
+# u_ratings_count <- u_ratings_count %>% mutate(test = n>5 & n<=10)
+# users_train = filter(u_ratings_count, test==FALSE)$userid
+# users_test = filter(u_ratings_count, test==TRUE)$userid
+train <- filter(ratings, date < "2009-01-01")
+test <- filter(ratings, date >= "2009-01-01")
 
 #rm(mask)
 
@@ -240,9 +257,15 @@ ggplot(profiles, aes(agegroup)) +
 
 
 ```{r}
-bm <- as(ratings,"binaryRatingMatrix")
+bm <- as(train,"binaryRatingMatrix")
+#bm <- as(filter(ratings, year == 2009),"binaryRatingMatrix")
+#es <- evaluationScheme(bm, method="split", train=0.95, given=1)
 
-es <- evaluationScheme(bm, method="split", train=0.95, k=1, given=2)
+param <- list(supp = 0.03, conf = 0.7, maxlen = 5)
+
+models <- list(
+  pop_model = list(name = "POPULAR"),
+  ar_model = list(name = "AR", param = param))
 
 
 ```
@@ -254,8 +277,14 @@ getModel(pop_model)
 ```
 
 ```{r}
-recs <- predict(pop_model, getData(es, "unknown"), type="topNList", n=2)
-calcPredictionAccuracy(recs, getData(es, "unknown"), given=1)
+pop_model <- Recommender(as(train,"binaryRatingMatrix"), "POPULAR")
+recs <- predict(pop_model, as(test, "binaryRatingMatrix") , type="topNList", n=2)
+calcPredictionAccuracy(recs, getData(es, "unknown"), given=2)
+```
+
+
+```{r}
+res <- evaluate(x = es, method = models, n = 1:3)
 ```
 
 
@@ -282,7 +311,8 @@ inspect(getRatingMatrix(bm))
 
 param <- list(supp = 0.03, conf = 0.7, maxlen = 10)
 
-ar_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% users_train ,], "AR", param)
+#ar_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% users_train ,], "AR", param)
+ar_model <- Recommender(getData(es, "train"), "AR", param)
 
 ```
 
@@ -307,7 +337,10 @@ ar_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% users_train ,], "
 #predict(ar_model, aubm, n=10)
 
 #guardar
-recs <- predict(ar_model,  sample(bm[ bm@data@itemsetInfo$itemsetID %in% users_test], 7000), n=2)
+#recs <- predict(ar_model,  sample(bm[ bm@data@itemsetInfo$itemsetID %in% users_test], 7000), n=2)
+recs <- predict(pop_model, getData(es, "unknown"), type="topNList", n=5)
+calcPredictionAccuracy(recs, getData(es, "unknown"), byUser = TRUE, given=5)
+
 
 #imprimir
 #getList(recs)

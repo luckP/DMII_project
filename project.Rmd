@@ -15,7 +15,7 @@ library(gridExtra)
 library(recommenderlab)
 library(scales)
 library(caTools)
-setwd("DMII_project")
+#setwd("DMII_project")
 ```
 
 
@@ -175,6 +175,12 @@ rm(users_prof,c_users_prof,users_rat,c_users_rat)
 #ratings <- filter(ratings, userid %in% profiles$userid) %>% mutate(year = substr(date, 1, 4))
 ```
 
+```{r}
+dat <- table(ratings$userid, ratings$movieid)
+dm <- dist(dat)
+```
+
+
 
 ```{r}
 #set.seed(7)
@@ -206,7 +212,7 @@ vamos filtrar todos os filmes que têm pelo menos 30 classificações
 ```{r 6}
 valid_movies <- ratings %>% count(movieid)
 
-valid_movies <- filter(valid_movies, n >= 50)
+valid_movies <- filter(valid_movies, n >= 150)
 ratings <- filter(ratings, movieid %in% valid_movies$movieid)
 movies <- filter(movies, movieid %in% ratings$movieid)
 
@@ -219,6 +225,10 @@ ratings_pro_plot <- ggplot(ratings, aes(rating)) +
 
 rm(valid_movies)
 #ratings_pro_plot
+
+train <- filter(ratings, date < "2009-01-01")
+test <- filter(ratings, date >= "2009-01-01")
+
 ```
 
 
@@ -261,7 +271,7 @@ bm <- as(ratings,"binaryRatingMatrix")
 #bm <- as(filter(ratings, year == 2009),"binaryRatingMatrix")
 #es <- evaluationScheme(bm, method="split", train=0.95, given=1)
 
-#param <- list(supp = 0.03, conf = 0.7, maxlen = 5)
+param <- list(supp = 0.02, conf = 0.8, maxlen = 20)
 
 #models <- list(
   #pop_model = list(name = "POPULAR"),
@@ -271,7 +281,10 @@ bm <- as(ratings,"binaryRatingMatrix")
 ```
 
 ```{r}
-pop_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% train$userid ,], "POPULAR")
+#pop_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% train$userid ,], "POPULAR")
+pop_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% train$userid ,], "AR", param)
+
+
 #pop_model <- Recommender(getData(es, "train"), "POPULAR")
 #getModel(pop_model)
 ```
@@ -279,12 +292,12 @@ pop_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% train$userid ,],
 ```{r}
 #pop_model <- Recommender(as(train,"binaryRatingMatrix"), "POPULAR")
 recs <- predict(pop_model, 
-                sample(bm[ bm@data@itemsetInfo$itemsetID %in% test$userid ,],1000),
+                sample(bm[ bm@data@itemsetInfo$itemsetID %in% test$userid ,],500),
                 type="topNList", 
-                n=2)
+                n=15)
 calcPredictionAccuracy(recs, 
-                       sample(bm[ bm@data@itemsetInfo$itemsetID %in% test$userid ,],1000),
-                       given=2)
+                       sample(bm[ bm@data@itemsetInfo$itemsetID %in% test$userid ,],500),
+                       given=15)
 ```
 
 

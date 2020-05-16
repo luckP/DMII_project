@@ -15,7 +15,7 @@ library(gridExtra)
 library(recommenderlab)
 library(scales)
 library(caTools)
-#setwd("DMII_project")
+setwd("DMII_project")
 ```
 
 
@@ -27,29 +27,107 @@ profiles <- read.csv('data/profiles.csv')
 ratings <- ratings2
 ```
 
-Vamos observar as variáveis relevantes da tabela profiles
-
-```{r 3}
-profiles$gender[profiles$gender == ""] <- "Unknown"
-profiles$gender <- as.factor(profiles$gender)
-
-
-summary(profiles)
+```{r}
+print(names(movies))
+print(names(profiles))
+print(names(ratings))
 ```
 
-Podemos tirar três conclusões no que toca à idade:
-  Os géneros são bastante equilibrados
-  Grande parte dos utilizadores usa regularmente o serviço
-  As idades correspondem em grande parte a uma faixa mais jovem. 
-No entanto existem idades impróvaveis.
-Portanto vamos resolver isso ao categorizar a variável "age", sendo que as categorias são de 5 em 5
-Não apenas isso mas também iremos considerar que as idades acima do 3º quartil 
-são desconhecidas, visto que há poucas
+Transformar as datas para um object Date
+```{r}
+ratings['date'] <- as.Date(ratings$date)
+profiles["memberfor"] <- as.Date(profiles$memberfor)
+```
+
+Summary de profiles e ratings
+```{r}
+print(summary(profiles))
+print(summary(ratings))
+```
+
+
+De acordo com a Wikipédia, o Flixster foi fundado em 1 de Junho 2006.
+Vamos apenas considerar que os ratings válidos são depois aqueles que foram efetuados no dia ou após o mesmo.
+Visto que existem utilizadores com a data de registo inicial abaixo da data de fundação, vamos usar a primeira data de classificação de cada utilizador para, caso o atributo memberfor for menos que essa data então trocamos.
+```{r}
+
+ratings <- filter(ratings, date >= "2006-01-20")
+
+first_rating <- ratings %>% group_by(userid) %>% slice(which.min(date))
+first_rating <- first_rating %>% mutate(first_rating_date = date)
+first_rating = subset(first_rating, select= -c(movieid,rating, date))
+
+# tambem remove utilizadores sem rating
+profiles = merge(profiles, first_rating, by="userid")
+
+profiles = profiles %>% mutate(memberfor = if_else(as.Date(memberfor)>as.Date(first_rating_date), 
+                                                   as.Date(first_rating_date), as.Date(memberfor)))
+```
+
+
+GRAFICO para as idades
+para o genero tambem
+Se a idade for nula ou o género não existir então removemos assim como utilizadores com idade superior a 70
+Criamos uma nova coluna onde a idade é de 5 em 5 anos. 
+```{r}
+profiles <- filter(profiles, !is.na(age) & gender != "")
+profiles$gender <- as.factor(profiles$gender)
+
+profiles['agegroup'] <- profiles['age'] %>% mutate(age = as.integer(age/5)*5)
+profiles$agegroup[is.na(profiles$agegroup) | profiles$agegroup > 70] <- 0
+profiles <- filter(profiles, agegroup != 0)
+
+```
+
+
+Com os utilizadores filtrados, filtramos tambem os ratings para contem apenas esses utilizadores
+```{r}
+users <- select(profiles, c("userid"))
+
+#filter ratings to have valid users (function filter com %in% demora muito)
+ratings <- merge(ratings, users, by="userid")
+
+```
+
+
+```{r}
+#grafico de quantidade de ratings por filme
+#grafico de quantidade de ratings por utilizador
+
+```
+
+Arranjar desculpa para filtrar
+
+```{r}
+
+ratings <- ratings %>% group_by(movieid) %>% filter(n() >= 10 & n() <= 3000)
+ratings <- ratings %>% group_by(userid) %>% filter(n() >= 10 & n() <= 15)
+
+valid_users <- as.data.frame(unique(ratings$userid))
+colnames(valid_users)[1] <- "userid"
+valid_movies <- as.data.frame(unique(ratings$movieid))
+colnames(valid_movies)[1] <- "movieid"
+profiles <- merge(profiles, valid_users, by="userid")
+movies <- merge(movies, valid_movies, by="movieid")
+
+
+print(nrow(valid_users))
+print(nrow(valid_movies))
+```
+
+
+```{r}
+dat <- table(ratings$userid, ratings$movieid)
+dm <- dist(dat)
+```
+
+
 
 ```{r 4}
 
 profiles['agegroup'] <- profiles['age'] %>% mutate(age = as.integer(age/5)*5)
 profiles$agegroup[is.na(profiles$agegroup) | profiles$agegroup > 70] <- 0
+profiles <- filter(profiles, agegroup != 0)
                                                               
 
 age_raw_plot = ggplot(profiles, aes(agegroup)) + 
@@ -71,114 +149,8 @@ age_sex_raw_plot = ggplot(profiles, aes(agegroup)) +
      facet_grid(~gender)
 ```
 
-A tabela ratings
-
-```{r 5, echo=TRUE}
-summary(ratings)
-```
-
-Podemos ver que grande parte das classificações são "acima da média", isto é são positivas. 
-Algo que é bom visto que, como o objectivo do projecto é recomendar filmes, apenas esses ratings iriam ser contabilizados.
 
 
-```{r save_ratings}
-# Create data
-#ratings['rating'] = floor(ratings$rating)
-
-ratings_raw_plot <- ggplot(ratings, aes(rating)) + 
- geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(rating)))  + 
-  scale_y_continuous(labels=scales::percent) +
-    labs(
-    title="Figura 4: Classificações de filmes",
-       x="Classificação",
-       y="% de Classificações")
-```
-
-Analise dos ratings
-```{r}
-  num_ratings_by_users <- ratings %>% count(userid)
-  num_users_by_num_ratings <- num_ratings_by_users %>% count(n)
-
-```
-
-```{r}
-  boxplot(filter(num_users_by_num_ratings, n>1)$nn)
-```
-
-```{r}
-  boxplot(filter(num_users_by_num_ratings, n < 2000 & n > 1)$nn)
-```
-
-```{r}
-ggplot(filter(num_users_by_num_ratings, n < 2000 & n > 1), aes(n, nn)) +
-    geom_line() +
-    labs(subtitle="mpg: city vs highway mileage",
-        y="number of users",
-        x="number of ratings",
-        title="Number of ratings per users") + 
-    scale_y_continuous(trans = log10_trans(),
-        breaks = trans_breaks("log10", function(x) 10^x),
-        labels = trans_format("log10", math_format(10^.x)))
-```
-
-
-
-```{r}
-
-ratings['date'] <- as.Date(ratings$date)
-ratings <- filter(ratings, date >= "2006-01-20")
-
-print(summary(ratings))
-nrow(ratings)
-```
-
-Filtrar os utilizadores dos ratings com menos de 2000 ratings e pelo menos 1. 
-Atualizar os ratings a partir dos utilizadores validos e que deram rating superior a 3
-
-```{r}
-
-valid_users <- filter(num_ratings_by_users,n<200 & n>5)$userid
-
-ratings <- filter(ratings, userid %in% valid_users)
-
-#ratings <- filter(ratings, rating >= 3)
-
-rm(valid_users,num_ratings_by_users,num_users_by_num_ratings)
-
-```
-
-
-
-```{r 8}
-
-users_prof <- unique(profiles$userid)
-c_users_prof <- length(users_prof)
-# Number of total users
-print(c_users_prof)
-
-
-users_rat <- unique(ratings$userid)
-c_users_rat <- length(users_rat)
-# Number of users that have rated a movie
-print(c_users_rat)
-
-# Number of useless users
-print(c_users_prof - c_users_rat)
-
-profiles <- filter(profiles, userid %in% users_rat)
-
-rm(users_prof,c_users_prof,users_rat,c_users_rat)
-
-```
-
-```{r}
-#ratings <- filter(ratings, userid %in% profiles$userid) %>% mutate(year = substr(date, 1, 4))
-```
-
-```{r}
-dat <- table(ratings$userid, ratings$movieid)
-dm <- dist(dat)
-```
 
 
 
@@ -212,7 +184,7 @@ vamos filtrar todos os filmes que têm pelo menos 30 classificações
 ```{r 6}
 valid_movies <- ratings %>% count(movieid)
 
-valid_movies <- filter(valid_movies, n >= 150)
+valid_movies <- filter(valid_movies, n >= 100)
 ratings <- filter(ratings, movieid %in% valid_movies$movieid)
 movies <- filter(movies, movieid %in% ratings$movieid)
 
@@ -265,119 +237,58 @@ ggplot(profiles, aes(agegroup)) +
 ```
 
 
-
 ```{r}
-bm <- as(ratings,"binaryRatingMatrix")
-#bm <- as(filter(ratings, year == 2009),"binaryRatingMatrix")
-#es <- evaluationScheme(bm, method="split", train=0.95, given=1)
-
-param <- list(supp = 0.02, conf = 0.8, maxlen = 20)
-
-#models <- list(
-  #pop_model = list(name = "POPULAR"),
-  #ar_model = list(name = "AR", param = param))
-
-
-```
-
-```{r}
-#pop_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% train$userid ,], "POPULAR")
-pop_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% train$userid ,], "AR", param)
-
-
-#pop_model <- Recommender(getData(es, "train"), "POPULAR")
-#getModel(pop_model)
-```
-
-```{r}
-#pop_model <- Recommender(as(train,"binaryRatingMatrix"), "POPULAR")
-recs <- predict(pop_model, 
-                sample(bm[ bm@data@itemsetInfo$itemsetID %in% test$userid ,],500),
-                type="topNList", 
-                n=15)
-calcPredictionAccuracy(recs, 
-                       sample(bm[ bm@data@itemsetInfo$itemsetID %in% test$userid ,],500),
-                       given=15)
+bm <- as(as.data.frame(ratings), "binaryRatingMatrix")
+image(bm)
 ```
 
 
 ```{r}
-res <- evaluate(x = es, method = models, n = 1:3)
+es <- evaluationScheme(bm, method="split", train=0.80, given=5)
+
+ar_params <- list(supp = 0.01, conf = 0.8, maxlen = 5)
+ucf_params <- list(method = "cosine", nn=3)
+icf_params <- list(method = "cosine", k=3)
+
+models <- list(
+  pop_model = list(name = "POPULAR"),
+  ar_model = list(name = "AR", param = ar_params),
+  ucf_model = list(name = "UBCF", parameter = ucf_params),
+  icf_model = list(name = "IBCF", parameter = icf_params))
+
+res <- evaluate(x = es, method = models, type="topNList", n = c(1,2,5))
+
 ```
 
 
-```{r}
-
-#guardar
-recs <- predict(pop_model, bm[ bm@data@itemsetInfo$itemsetID %in% users_test ,], type="topNList", n=2)
-
-#imprimir
-getList(recs)
-```
 
 
 ```{r}
-getRatingMatrix(bm)
-
-inspect(getRatingMatrix(bm))
+rm <- as(as.data.frame(ratings), "realRatingMatrix")
 
 ```
 
 
 
 ```{r}
-
-param <- list(supp = 0.03, conf = 0.7, maxlen = 10)
-
-#ar_model <- Recommender(bm[ bm@data@itemsetInfo$itemsetID %in% users_train ,], "AR", param)
-ar_model <- Recommender(getData(es, "train"), "AR", param)
-
+image(as(as.data.frame(head(ratings,100)),"realRatingMatrix"))
 ```
 
-```{r}
-# busca das classificações do userid 11
-# user_movies <- filter(ratings, userid == 103006)$movieid
-# 
-# user_movies <- as.character(user)[15:25]
-# 
-# # converter para uma linha
-# activeuser <- matrix(0 , 1, ncol=length(unique(movies$movieid)), 
-#                      dimnames = list(" ",
-#                                      as.character(sort(unique(movies$movieid)))))
-# 
-# # mudar as classificaçoes para 1
-# activeuser[1, user_movies] <- 1
-#  
-# # mudar para binary...
-# aubm <- as(activeuser, 'binaryRatingMatrix')
-
-#prever
-#predict(ar_model, aubm, n=10)
-
-#guardar
-#recs <- predict(ar_model,  sample(bm[ bm@data@itemsetInfo$itemsetID %in% users_test], 7000), n=2)
-recs <- predict(pop_model, getData(es, "unknown"), type="topNList", n=5)
-calcPredictionAccuracy(recs, getData(es, "unknown"), byUser = TRUE, given=5)
-
-
-#imprimir
-#getList(recs)
-
-#getModel(ar_model)
-```
 
 
 ```{r}
-  rules <- getModel(ar_model)$rule_base
-  inspect(rules)
+es <- evaluationScheme(rm, method="split", train=0.99, given=5)
 
+ucf_params <- list(method = "cosine", nn=5)
+icf_params <- list(method = "cosine", k=5)
+
+models <- list(
+  ucf_model = list(name = "UBCF", parameter = ucf_params),
+  icf_model = list(name = "IBCF", parameter = icf_params))
+
+
+res <- evaluate(x = es, method = models, type = "ratings", n = c(1,2,5))
 ```
-
-
-```{r}
-  plot(rules)
-```
-
 
 
 

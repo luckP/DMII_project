@@ -2,7 +2,11 @@
 title: "DMII"
 author: "Ana Catarina Monteiro, Artur Ferreira, Lucas Parada"
 date: "4/25/2020"
-output: html_document
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
 editor_options: 
   chunk_output_type: console
 ---
@@ -15,9 +19,12 @@ library(gridExtra)
 library(recommenderlab)
 library(scales)
 library(caTools)
-setwd("DMII_project")
+#setwd("DMII_project")
 ```
 
+
+
+Falar do processamento que foi feito em python
 
 ```{r 2}
 movies <- read.csv('data/movies.csv')
@@ -26,6 +33,8 @@ profiles <- read.csv('data/profiles.csv')
 #ratings2 = ratings
 ratings <- ratings2
 ```
+
+Ver as colunas
 
 ```{r}
 print(names(movies))
@@ -93,11 +102,34 @@ ratings <- merge(ratings, users, by="userid")
 ```{r}
 #grafico de quantidade de ratings por filme
 #grafico de quantidade de ratings por utilizador
+movie_count <- as.data.frame(ratings$movieid) 
+colnames(movie_count)[1] <- "movieid"
+movie_count <- movie_count %>% count(movieid) %>% count(n)
 
+
+#filter(num_users_by_num_ratings, n < 2000 & n > 1)
+ggplot(movie_count, aes(n, nn)) +
+    geom_line() +
+    labs(subtitle="mpg: city vs highway mileage",
+        y="number of users",
+        x="number of ratings",
+        title="Number of ratings per users") + 
+    scale_y_continuous(trans = log10_trans(),
+        breaks = trans_breaks("log10", function(x) 10^x),
+        labels = trans_format("log10", math_format(10^.x)))
+# fazer grafico exponencial a mostrar o quantidade de filme com n ratings
+
+#ggplot(ratings, aes(movieid)) + 
+#  geom_histogram(aes(y = (..count..)), bins = length(unique(ratings$movieid)))  + 
+#  labs(title="Figura 1: Utilizadores que já classificaram um filme por género",
+#       x="Sexo", y="Nº de Utilizadores") 
 ```
 
-Arranjar desculpa para filtrar
 
+
+
+
+Arranjar desculpa para filtrar
 ```{r}
 
 ratings <- ratings %>% group_by(movieid) %>% filter(n() >= 10 & n() <= 3000)
@@ -117,36 +149,36 @@ print(nrow(valid_movies))
 
 
 ```{r}
-dat <- table(ratings$userid, ratings$movieid)
-dm <- dist(dat)
+# dat <- table(ratings$userid, ratings$movieid)
+# dm <- dist(dat)
 ```
 
 
 
 ```{r 4}
 
-profiles['agegroup'] <- profiles['age'] %>% mutate(age = as.integer(age/5)*5)
-profiles$agegroup[is.na(profiles$agegroup) | profiles$agegroup > 70] <- 0
-profiles <- filter(profiles, agegroup != 0)
-                                                              
-
-age_raw_plot = ggplot(profiles, aes(agegroup)) + 
-           geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup))) +
-  scale_y_continuous(labels=scales::percent) +
-  labs(title="Figura 1: Utilizadores por idade", x="Sexo", y="% de Utilizadores")
-
-
-gender_raw_plot = ggplot(profiles, aes(gender)) + 
-  geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(gender))) +
-  scale_y_continuous(labels=scales::percent) +
-  labs(title="Figura 2: Utilizadores por género",x="Sexo", y="% de Utilizadores")
-
-
-age_sex_raw_plot = ggplot(profiles, aes(agegroup)) + 
-     geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  + 
-     scale_y_continuous(labels=scales::percent) +
-     labs(title="Figura 3: Idade dos utilizadores por género", x="Idade", y="% de Utilizadores") + 
-     facet_grid(~gender)
+# profiles['agegroup'] <- profiles['age'] %>% mutate(age = as.integer(age/5)*5)
+# profiles$agegroup[is.na(profiles$agegroup) | profiles$agegroup > 70] <- 0
+# profiles <- filter(profiles, agegroup != 0)
+#                                                               
+# 
+# age_raw_plot = ggplot(profiles, aes(agegroup)) + 
+#            geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup))) +
+#   scale_y_continuous(labels=scales::percent) +
+#   labs(title="Figura 1: Utilizadores por idade", x="Sexo", y="% de Utilizadores")
+# 
+# 
+# gender_raw_plot = ggplot(profiles, aes(gender)) + 
+#   geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(gender))) +
+#   scale_y_continuous(labels=scales::percent) +
+#   labs(title="Figura 2: Utilizadores por género",x="Sexo", y="% de Utilizadores")
+# 
+# 
+# age_sex_raw_plot = ggplot(profiles, aes(agegroup)) + 
+#      geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  + 
+#      scale_y_continuous(labels=scales::percent) +
+#      labs(title="Figura 3: Idade dos utilizadores por género", x="Idade", y="% de Utilizadores") + 
+#      facet_grid(~gender)
 ```
 
 
@@ -163,8 +195,8 @@ age_sex_raw_plot = ggplot(profiles, aes(agegroup)) +
 # u_ratings_count <- u_ratings_count %>% mutate(test = n>5 & n<=10)
 # users_train = filter(u_ratings_count, test==FALSE)$userid
 # users_test = filter(u_ratings_count, test==TRUE)$userid
-train <- filter(ratings, date < "2009-01-01")
-test <- filter(ratings, date >= "2009-01-01")
+# train <- filter(ratings, date < "2009-01-01")
+# test <- filter(ratings, date >= "2009-01-01")
 
 #rm(mask)
 
@@ -182,120 +214,162 @@ sido classificado por várias pessoas. Portanto,
 vamos filtrar todos os filmes que têm pelo menos 30 classificações
 
 ```{r 6}
-valid_movies <- ratings %>% count(movieid)
-
-valid_movies <- filter(valid_movies, n >= 100)
-ratings <- filter(ratings, movieid %in% valid_movies$movieid)
-movies <- filter(movies, movieid %in% ratings$movieid)
-
-ratings_pro_plot <- ggplot(ratings, aes(rating)) +
-  geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(rating)))  +
-  scale_y_continuous(labels=scales::percent) +
-  theme(legend.position="none") +
-  labs(
-    title="Figura 1: Ratings de filmes com mais de 50 ratings \"positivos\"", x="Rating", y="Nº of ratings")
-
-rm(valid_movies)
-#ratings_pro_plot
-
-train <- filter(ratings, date < "2009-01-01")
-test <- filter(ratings, date >= "2009-01-01")
+# valid_movies <- ratings %>% count(movieid)
+# 
+# valid_movies <- filter(valid_movies, n >= 100)
+# ratings <- filter(ratings, movieid %in% valid_movies$movieid)
+# movies <- filter(movies, movieid %in% ratings$movieid)
+# 
+# ratings_pro_plot <- ggplot(ratings, aes(rating)) +
+#   geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(rating)))  +
+#   scale_y_continuous(labels=scales::percent) +
+#   theme(legend.position="none") +
+#   labs(
+#     title="Figura 1: Ratings de filmes com mais de 50 ratings \"positivos\"", x="Rating", y="Nº of ratings")
+# 
+# rm(valid_movies)
+# #ratings_pro_plot
+# 
+# train <- filter(ratings, date < "2009-01-01")
+# test <- filter(ratings, date >= "2009-01-01")
 
 ```
 
 
 ```{r 9}
 
-gender_pro_plot = ggplot(profiles, aes(gender)) + 
-  geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(gender)))  + 
-     scale_y_continuous(labels=scales::percent) +
-  labs(title="Figura 2: Utilizadores que já classificaram um filme por género",
-       x="Sexo", y="Nº de Utilizadores") 
-
-grid.arrange(gender_raw_plot, gender_pro_plot, ncol=2)
+# gender_pro_plot = ggplot(profiles, aes(gender)) + 
+#   geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(gender)))  + 
+#      scale_y_continuous(labels=scales::percent) +
+#   labs(title="Figura 2: Utilizadores que já classificaram um filme por género",
+#        x="Sexo", y="Nº de Utilizadores") 
+# 
+# grid.arrange(gender_raw_plot, gender_pro_plot, ncol=2)
 ```
 
 
 ```{r 10}
 
-age_pro_plot = ggplot(profiles, aes(agegroup)) + 
- geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  + 
-     scale_y_continuous(labels=scales::percent) +
-  labs(title="Figura 2: Utilizadores por género",
-       x="Sexo", y="Nº de Utilizadores")
-
-grid.arrange(age_raw_plot, age_pro_plot, ncol=2)
+# age_pro_plot = ggplot(profiles, aes(agegroup)) + 
+#  geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  + 
+#      scale_y_continuous(labels=scales::percent) +
+#   labs(title="Figura 2: Utilizadores por género",
+#        x="Sexo", y="Nº de Utilizadores")
+# 
+# grid.arrange(age_raw_plot, age_pro_plot, ncol=2)
 ```
 
 ```{r 11}
 # Diferença de genero de quem votou
-ggplot(profiles, aes(agegroup)) + 
-     geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  + 
-     scale_y_continuous(labels=scales::percent) +
-     ylab("relative frequencies") + facet_grid(~gender)
+# ggplot(profiles, aes(agegroup)) + 
+#      geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  + 
+#      scale_y_continuous(labels=scales::percent) +
+#      ylab("relative frequencies") + facet_grid(~gender)
 
 ```
 
 
 ```{r}
+eval_binary_func <- function(mat, train, given, nn) {
+  es <- evaluationScheme(mat, method="split", train=train, given=given)
+
+  ar_params <- list(supp = 0.01, conf = 0.8, maxlen = 5)
+  ucf_params <- list(method = "cosine", nn=nn)
+  icf_params <- list(method = "cosine", k=nn)
+
+  models <- list(
+    pop_model = list(name = "POPULAR"),
+    ar_model = list(name = "AR", param = ar_params),
+    ucf_model = list(name = "UBCF", parameter = ucf_params),
+    icf_model = list(name = "IBCF", parameter = icf_params))
+
+  res <- evaluate(x = es, method = models, type="topNList", n = c(1,2,5))
+  return(res)
+}
+
+eval_real_func <- function(mat, train, given, nn) {
+  es <- evaluationScheme(mat, method="split", train=train, given=given, goodRating = 3.0)
+
+  ucf_params <- list(method = "cosine", nn=nn)
+  icf_params <- list(method = "cosine", k=nn)
+
+  models <- list(
+    ucf_model = list(name = "UBCF", parameter = ucf_params),
+    icf_model = list(name = "IBCF", parameter = icf_params))
+
+  res <- evaluate(x = es, method = models, type="topNList", n = c(1,2,5))
+  return(res)
+}
+```
+
+
+
+```{r}
 bm <- as(as.data.frame(ratings), "binaryRatingMatrix")
+
 image(bm)
 ```
 
 
 ```{r}
-es <- evaluationScheme(bm, method="split", train=0.80, given=5)
-
-ar_params <- list(supp = 0.01, conf = 0.8, maxlen = 5)
-ucf_params <- list(method = "cosine", nn=3)
-icf_params <- list(method = "cosine", k=3)
-
-models <- list(
-  pop_model = list(name = "POPULAR"),
-  ar_model = list(name = "AR", param = ar_params),
-  ucf_model = list(name = "UBCF", parameter = ucf_params),
-  icf_model = list(name = "IBCF", parameter = icf_params))
-
-res <- evaluate(x = es, method = models, type="topNList", n = c(1,2,5))
-
+res <- eval_binary_func(bm, 0.80, 5, 5)
+print(avg(res))
 ```
 
-
+avaliar
 
 
 ```{r}
 rm <- as(as.data.frame(ratings), "realRatingMatrix")
 
+image(rm[1:100,2000:2100], cuts=8, colorkey=T, col=topo.colors(10))
 ```
 
 
 
 ```{r}
-image(as(as.data.frame(head(ratings,100)),"realRatingMatrix"))
+res <- eval_real_func(bm, 0.80, 5, 5)
+print(avg(res))
 ```
 
+avaliar
+
+#ggplot(profiles, aes(agegroup)) + 
+#       geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  + 
+#       scale_y_continuous(labels=scales::percent) +
+#       labs(title="Figura 3: Idade dos utilizadores por género", x="Idade", y="% de Utilizadores") + 
+#       facet_grid(~gender)
+
+
+Com contexto
+```{r}
+users <- filter(profiles, agegroup == 15 )$userid
+bm <- as(as.data.frame(filter(ratings, userid %in% users)), "binaryRatingMatrix")
+
+res <- eval_binary_func(bm, 0.8, 5, 5)
+print(avg(res))
+
+```
 
 
 ```{r}
-es <- evaluationScheme(rm, method="split", train=0.99, given=5)
+users <- filter(profiles, agegroup == 15 & gender == "Female")$userid
+bm <- as(as.data.frame(filter(ratings, userid %in% users)), "binaryRatingMatrix")
 
-ucf_params <- list(method = "cosine", nn=5)
-icf_params <- list(method = "cosine", k=5)
+res <- eval_binary_func(bm, 0.8, 5, 5)
+print(avg(res))
 
-models <- list(
-  ucf_model = list(name = "UBCF", parameter = ucf_params),
-  icf_model = list(name = "IBCF", parameter = icf_params))
-
-
-res <- evaluate(x = es, method = models, type = "ratings", n = c(1,2,5))
 ```
 
 
+```{r}
+users <- filter(profiles, agegroup == 15 & gender == "Male")$userid
+bm <- as(as.data.frame(filter(ratings, userid %in% users)), "binaryRatingMatrix")
 
+res <- eval_binary_func(bm, 0.8, 5, 5)
+print(avg(res))
 
-
-
-
+```
 
 
 

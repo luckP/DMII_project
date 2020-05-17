@@ -18,15 +18,27 @@ library(gridExtra)
 library(recommenderlab)
 library(scales)
 library(caTools)
+library(png)
 set.seed(7) # for reproducibility
 #setwd("DMII_project")
 ```
 
 # Introdução
+Este projeto tem como objetivo a comparação do desempenho de diferentes estratégias de recomendação de filmes a um conjunto de utilizadores, tendo como base um conjunto de dados obtidos através do Flixter, um site onde é possível a partilha de classificações de filmes. Através do mesmo, torna-se possível descobrir novos filmes, baseados nos gostos semelhantes de outros utilizadores.  
 
+Os respetivos dados contêm informações relativas às classificações dadas por cada utilizador a um dado filme, assim como a respetiva identificação de ambos e data da sua ocorrência (esta classificação é atribuída com base numa escala numérica que compreende valores de zero a cinco, variando de meio em meio valor) e ainda, informações relativas aos filmes do site: nome e id, bem como as de cada utilizador. Este último englobando dados como o id do utilizador e outras informações que o caracterizam, tais como género, idade, localização, data de login e o tempo relativo ao último acesso ao site. 
 
-# Exploração e processamento dos dados
-Falar do processamento que foi feito em python
+Numa primeira fase, foi realizada a importação dos dados, assim como a sua respetiva análise exploratória e pré-processamento. Posto isto, procedeu-se à aplicação de diferentes modelos de recomendação, recorrendo a informações binárias e não-binárias relativas às classificações dadas para um conjunto de filmes, visando assim a recomendação de um top N de filmes para um conjunto de utilizadores. Por fim, comparam-se os resultados obtidos em diferentes modelos assim como diferentes top N’s (1,2,5) de recomendações. Foi realizada ainda a análise desses resultados tendo em conta informações adicionais relativas a cada utilizador, como idade e género. 
+
+# Definição do problema
+Num site cujo maior objetivo é a partilha de filmes e classificação dos mesmos, torna-se essencial que cada utilizador consiga obter recomendações de novos filmes, baseadas em gostos e avaliações semelhantes de outros utilizadores. Para isso, é essencial a criação de sistemas de recomendação que garantam ao máximo esses resultados. Ainda assim nem todos os sistemas apresentam conclusões iguais, os quais iremos avaliar ao longo deste relatório. 
+
+# Análise exploratória de dados e etapas de pré-processamento 
+Inicialmente realizámos a importação dos dados para o formato que considerámos mais apropriado, visando facilitar a sua limpeza, pré-processamento e posterior análise. Para tal, começámos por importar os dados utilizando a biblioteca Pandas do python, uma vez que sabíamos como aplicar estas operações na dita linguagem, transformando o encode para UTF-8 e recorrendo à função ‘html.unescape’ convertemos o html em texto normal. Por fim exportámos os dataframes para ficheiros em formato csv.
+
+Posteriormente, elegemos o DataFrame do R para proceder à restante manipulação dos dados, visto estarmos mais familiarizados com a matéria lecionada durante as aulas. 
+
+Desta forma, através da função ‘summary’, conseguimos observar algumas informações genéricas relativas aos conjuntos de dados ‘movies’, ‘profiles’ e ‘ratings’ respetivamente, onde pudemos observar nomeadamente diferentes dados estatísticos relativos à distribuição das variáveis nos conjuntos de dados assim como a existência de missing values. Mais tarde, identificámos *missing values* presentes em alguns parâmetros, tal como podemos observar nas tabelas abaixo, os quais tratámos isoladamente. 
 
 ```{r echo=FALSE}
 movies <- read.csv('data/movies.csv', 
@@ -41,19 +53,29 @@ ratings2 <- ratings
 #ratings <- ratings2
 ```
 
-Summary de movies, profiles e ratings
+Summary de movies
 
 ```{r echo=FALSE}
 print(summary(movies))
+```
+
+Summary de profiles
+
+```{r echo=FALSE}
 print(summary(profiles))
+```
+
+Summary de ratings
+
+```{r echo=FALSE}
 print(summary(ratings))
 ```
 
+Ao observar os dados relativos à tabela “pofiles” conseguimos facilmente tirar algumas conclusões. Primeiramente, reparámos que grande parte das datas relativas a ‘memberfor’ não se mostravam em conformidade com a data de fundação do site, isto é, de acordo com a Wikipédia, o [Flixster](https://en.wikipedia.org/wiki/Flixster) foi fundado a 20 de janeiro de 2006. Por este motivo considerámos apenas utilizadores que tenham classificado algum filme nesse dia ou após o mesmo. Já no caso de utilizadores cuja data de registo tenha sido registada depois do seu primeiro rating, considerámos esta última como data para o atributo ‘memberfor’.
 
-De acordo com a Wikipédia, o [Flixster](https://en.wikipedia.org/wiki/Flixster) foi fundado em 20 de Janeiro 2006.
-Como vimos no summary acima, nem todas as datas estão de acordo com isto. 
-Vamos apenas considerar que os ratings válidos são aqueles que foram efetuados no dia ou após o mesmo.
-Visto que existem utilizadores com a data de registo inicial abaixo da data de fundação, vamos usar a primeira data de classificação de cada utilizador para, caso o atributo memberfor for menos que essa data então trocamos.
+Desta forma, o atributo data dos datasets ‘Profiles’ e ‘Ratings’ passa a estar atualizado e em conformidade.
+
+No que diz respeito à distribuição dos géneros, reparámos que os utilizadores, em geral, são maioritariamente de género feminino e em faixas etárias mais baixas. Já no que concerne à distribuição das idades, notámos uma maior quantidade de utilizadores mais jovens em oposição a utilizadores com uma idade pouco provável, os quais decidimos tratar de modo diferente. Começámos por categorizar a variável “age”, (numa nova coluna “agegroup”) em categorias com intervalos de cinco em cinco anos e posteriormente, remover utilizadores cuja idade considerada como ‘idoso’, isto é, superior a sessenta anos, ou cuja idade fosse desconhecida, uma vez que eram poucos os que cumpriam estes requisitos. Deste modo, conseguimos confirmar as conclusões descritas acima tendo como base o gráfico de barras (figura "Idade dos utilizadores por género").
 
 ```{r echo=FALSE}
 ratings <- filter(ratings, date >= "2006-01-20")
@@ -72,30 +94,46 @@ profiles = profiles %>% mutate(memberfor = if_else(is.na(memberfor) | pmin(membe
                                                     first_rating_date, memberfor))
 ```
 
-Com isto as datas de Profiles e Ratings ficam:
-
-```{r echo=FALSE}
-summary(profiles$memberfor)
-summary(ratings$date)
-```
-
-
-De forma a tornar mais fácil a visualição das idades, agrupamos as idades de cada utilizador de 5 em 5 anos.
-
 ```{r echo=FALSE, warning=FALSE}
 profiles['agegroup'] <- profiles['age'] %>% mutate(age = as.integer(age/5)*5)
+```
 
+```{r eval=FALSE, include=FALSE}
+
+print(paste("Nº de avaliações",nrow(profiles)))
+png(filename = "./extra/age_sex_raw.png")
 ggplot(profiles, aes(agegroup)) +
   geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  +
   guides(fill=guide_legend(title="Idade")) +
   scale_y_continuous(labels=scales::percent) +
   labs(title="Idade dos utilizadores por género", x="Idade", y="% de Utilizadores") +
   facet_grid(~gender)
+dev.off()
+
+
+print(paste("Nº de avaliações",nrow(ratings)))
+png(filename = "./extra/ratings_raw.png")
+ggplot(ratings, aes(rating)) +
+  geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(rating)), width=0.4)  +
+  guides(fill=guide_legend(title="Avaliação")) +
+  scale_y_continuous(labels=scales::percent) +
+  labs(title="Avaliações (processado)", x="Classificação", y="% de Avaliações")
+dev.off()
 ```
 
-Como existem poucos utilizadores sem género ou com a idade superior a 60, decidimos removê-los.
-Também vamos ignorar os casos em que a idade é nula para posteriormente, pudermos fazer recomendações com base em contexto.
+```{r echo=FALSE}
+print(paste("Nº de utilizadores",nrow(profiles)))
+img <- readPNG('./extra/age_sex_raw.png')
+grid::grid.raster(img)
+```
 
+No caso da figura que se segue conseguimos observar a distribuição de ratings, medindo a percentagem para cada nível de classificação.
+
+```{r echo=FALSE}
+print(paste("Nº de avaliações",nrow(ratings)))
+img <- readPNG('./extra/ratings_raw.png')
+grid::grid.raster(img)
+```
 
 ```{r echo=FALSE}
 
@@ -105,20 +143,6 @@ profiles$gender <- as.factor(profiles$gender)
 profiles$agegroup[is.na(profiles$agegroup) | profiles$agegroup > 60] <- 0
 profiles <- filter(profiles, agegroup != 0)
 
-# ggplot(profiles, aes(agegroup)) +
-#   geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  +
-#   guides(fill=guide_legend(title="Idade")) +
-#   scale_y_continuous(labels=scales::percent) +
-#   labs(title="Idade dos utilizadores por género (processado)", x="Idade", y="% de Utilizadores") +
-#   facet_grid(~gender)
-```
-
-Podemos ver que em geral, tratam-se de utilizadores do género feminino especialmente em faixas etárias mais baixas.
-
-
-Com os utilizadores filtrados, filtramos tambem os ratings para contem apenas esses utilizadores
-
-```{r echo=FALSE}
 users <- select(profiles, c("userid"))
 
 #filter ratings to have valid users (function filter com %in% demora muito)
@@ -126,17 +150,7 @@ ratings <- merge(ratings, users, by="userid")
 
 ```
 
-
-## Ratings por filme
-
-Descobrimos que existe uma grande desproporcionalidade na quantidade de ratings que cada filme tem:
-
-```{r echo=FALSE}
-summary(ratings %>% count(movieid))
-```
-
-Existem filmes com apenas uma classificação e no máximo temos 34.791 classificações.
-Devido a descrepância dos dados, criámos gráfico que mostra a quantidade de filmes com N ratings em escala exponencial.
+Atualizámos depois os utilizadores da tabela ratings, tendo em conta os resultados descritos acima e prosseguimos com uma breve análise à mesma, onde aferimos uma grande desproporcionalidade na quantidade de ratings comparativamente ao número de filmes, ou seja, existem filmes apenas com uma classificação e filmes com, no máximo,  trinta e quatro mil setecentos e noventa e uma classificações. No gráfico da figura abaixo conseguimos observar a discrepância destes valores, tendo em conta a quantidade de filmes com N ratings em escala exponencial.
 
 ```{r echo=FALSE}
 #grafico de quantidade de ratings por filme
@@ -159,19 +173,13 @@ ggplot(movie_count, aes(n, nn)) +
                      breaks = trans_breaks("log2", function(x) 2^x),
                      labels = trans_format("log2", math_format(2^.x)))
 
+rm(movie_count)
+
 ```
 
-Decidimos então remover os filmes que têm menos de 10 ratings para garantir a relevância dos filme entre os utilizadores, isto é, um filme com poucas classificações tem pouca probabilidade de ser recomendado. Também removemos os que têm mais que 1024 avaliações para poder fazer mais recomendações inesperadas pelos utilizadores.
+Posto isto decidimos remover filmes com menos de dez e mais de mil e vinte e quatro classificações tendo em vista garantir a relevância dos filmes entre os utilizadores, ou seja, partindo do princípio que um filme com pouca interatividade apresenta uma menor probabilidade de ser recomendado e vice-versa. 
 
-
-Existe também uma grande diferença na quantidade de classificações feitas por utilizador
-
-```{r echo=FALSE}
-summary(ratings %>% count(userid))
-```
-
-Existem muitos utilizadores com milhares de avaliações. 
-Tal como em cima, geramos um gráfico em escala exponencial que mostra a quantidade de utilizadores com N ratings.
+Notámos ainda uma grande disparidade na quantidade de classificações realizadas por utilizador, dado este comprovado pelo gráfico da figura 3, de novo numa escala exponencial, que mostra a quantidade de ratings dados por utilizador. Tal como o mesmo indica, podemos aferir a existência de muitos utilizadores com milhares de ratings.
 
 ```{r echo=FALSE}
 ratings <- ratings %>% group_by(movieid) %>% filter(n() >= 16 & n() <= 1024)
@@ -195,41 +203,58 @@ ggplot(movie_count, aes(n, nn)) +
                      labels = trans_format("log2", math_format(2^.x)))
 
 ratings <- ratings %>% group_by(userid) %>% filter(n() >= 10 & n() <= 16)
+
+rm(movie_count)
+
 ```
 
-Como queremos gerar recomendações a um grupo que vai tirar melhor proveito delas, retiramos utilizadores com mais de 32 ratings. E, de forma a ter contexto suficiente para poder gerar recomendações relevante, definimos que cada utilizador tem que ter pelo menos 10 classificações.
+Concluindo, podemos agora observar a distribuição de idades e géneros por utilizador assim como a variação de classificações, com os dados já processados, tal como indicam as próximas duas figuras. 
 
-
-Os nossos dados processados são os seguintes
 ```{r echo=FALSE}
-
 valid_users <- as.data.frame(unique(ratings$userid))
 colnames(valid_users)[1] <- "userid"
 valid_movies <- as.data.frame(unique(ratings$movieid))
 colnames(valid_movies)[1] <- "movieid"
 profiles <- merge(profiles, valid_users, by="userid")
 movies <- merge(movies, valid_movies, by="movieid")
-
-
-
 print(paste("Nº de filmes",nrow(valid_movies)))
 print(paste("Nº de utilizadores",nrow(valid_users)))
-rm(valid_movies, valid_users)
+```
 
+```{r eval=FALSE, include=FALSE}
+
+png(filename = "./extra/age_sex_pro.png")
 ggplot(profiles, aes(agegroup)) +
   geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  +
   guides(fill=guide_legend(title="Idade")) +
   scale_y_continuous(labels=scales::percent) +
   labs(title="Idade dos utilizadores por género (processado)", x="Idade", y="% de Utilizadores") +
   facet_grid(~gender)
-
+dev.off()
 
 print(paste("Nº de avaliações",nrow(ratings)))
+png(filename = "./extra/ratings_pro.png")
 ggplot(ratings, aes(rating)) +
   geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(rating)), width=0.4)  +
   guides(fill=guide_legend(title="Avaliação")) +
   scale_y_continuous(labels=scales::percent) +
   labs(title="Avaliações (processado)", x="Classificação", y="% de Avaliações")
+dev.off()
+```
+
+```{r echo=FALSE}
+
+img <- readPNG('./extra/age_sex_pro.png')
+grid::grid.raster(img)
+```
+
+```{r echo=FALSE}
+print(paste("Nº de avaliações",nrow(ratings)))
+
+img <- readPNG('./extra/ratings_pro.png')
+grid::grid.raster(img)
+
+rm(valid_movies, valid_users)
 ```
 
 
@@ -237,6 +262,10 @@ ggplot(ratings, aes(rating)) +
 
 
 # Sistemas de Recomendação
+
+No que concerne aos sistemas de recomendação, foram abordados neste projeto quatro algoritmos distintos: Popularidade, Regras de Associação (AR), e Collaborative Filtering, sendo este último composto por User-Based (UBCF) e Item-Based (IBCF).
+
+Começámos por criar duas funções distintas, capazes de calcular as recomendações pretendidas, tendo em conta informações relativas às classificações dadas pelos utilizadores: binárias, para os modelos mencionados acima e não binárias, este último aplicado somente ao UBCF e IBCF. Em ambos os casos utilizámos a função ‘evaluationScheme’ para dividir o conjunto de dados em treino e teste e definimos os parâmetros que cada algoritmo requer assim como executar os modelos para top N(1, 2 e 5).
 
 ```{r echo=FALSE}
 eval_binary_func <- function(mat, train, given, nn) {
@@ -276,117 +305,166 @@ eval_real_func <- function(mat, train, given, nn) {
 
 ### Recomendações de filmes
 
-Sem levar em conta as caracteristicas das pessoas, criamos a matrix binária correlacionando os utilizadores e os filmes.
+Para aplicar os modelos mencionados, começámos por desconsiderar informações que caracterizam cada utilizador, e criámos a matriz binária que correlaciona os utilizadores e os filmes (figura abaixo).
 
 ```{r echo=FALSE}
 bm <- as(as.data.frame(ratings), "binaryRatingMatrix")
-plot(image(bm))
 ```
 
-
-Para gerar recomendações de filmes, usamos 4 algoritmos: Popularidade, Regras de Associação, User-Based CF, Item-Based CF.
-Para as regras de associação usámos um suporte de 0.01, pois evitar a escassez de regras. Mas definimos a confiança a 0.8 para as garantir que as regras geradas fossem fiáveis. Definimos também o comprimento máximo das regras a 3, porque temos um mínimo de 10 filmes avaliados por pessoa e vão ser recomendados no máximo 5 filmes.
-Nos algoritmos UBCF e IBCF, definimos os nearest-neighbours a 5. Não escolhemos um número mais alto para os algoritmos não fazerem recomendações com vizinhos que, na verdade, não são assim tão semelhantes.
-
-
-Os dados obtidos foram:
+```{r eval=FALSE, include=FALSE}
+png(filename = './extra/bm.png')
+image(bm)
+dev.off()
+```
 
 ```{r echo=FALSE}
+img <- readPNG('./extra/bm.png')
+grid::grid.raster(img)
+```
+
+Relativamente às regras de associação escolhemos um suporte de 0.01, para evitar a escassez de regras, no entanto, definimos a confiança a 0.8 tendo em vista garantir a fiabilidade das mesmas. Definimos ainda o comprimento máximo das regras como cinco, uma vez que considerámos um mínimo de dez filmes avaliados por utilizador e tendo em conta que, no máximo, serão recomendados cinco filmes.
+Já no caso dos algoritmos UBCF e IBCF, definimos os *nearest-neighbours* a três para evitar que, na hipótese de escolher um número maior, os algoritmos não fizessem recomendações com vizinhos que, na verdade, não se mostram assim tão semelhantes.
+
+Deste modo podemos observar os dados obtidos através da seguinte figura:
+
+```{r eval=FALSE, include=FALSE}
 l <- eval_binary_func(bm, 0.80, 3, 3)
+
+png(filename = './extra/bm_results.png')
+
 par(mfrow=c(1,2))
 plot(l$res,"ROC" ,annotate=c("1","2","3"))
 plot(l$res,"prec/rec" ,annotate=c("1","2","3"))
+
+dev.off()
 rm(bm,l)
 ```
 
-Avaliar
+
+```{r echo=FALSE}
+img <- readPNG('./extra/bm_results.png')
+grid::grid.raster(img)
+```
+
+Através da análise dos gráficos obtidos, identificámos que o algoritmo UBCF apresenta os melhores valores de *precision* e *recall* comparativamente aos restantes modelos. Apesar de ser notória a diminuição da métrica *precision* à medida que o número de recomendações aumenta, no caso das métricas *True Positive Rate* (TPR) e *False Positive Rate* (FPR), ambas aumentam com o número de recomendações. Notámos ainda que, o algoritmo AR apresenta bons resultados em relação à *precision*, contudo os seus valores de *recall* são quase nulos, o que nos sugere um baixo número de TPR. Já no que diz respeito ao algoritmo da Popularidade todos os valores foram consideravelmente baixos ainda assim, num outro extremo, percebemos que o algoritmo IBCF obteve os piores resultados com uma *precision* e *recall* quase igualadas a zero.
 
 
 
 ### Prever os ratings
-Para prever as avaliações dos filmes de utilizadores usámos apenas UBCF e IBCF, visto que a popularidade e as regras de associação não são algoritmos válidos para esta tarefa. Os parametros dos algoritmos são os mesmos que os usados na recomendação de filmes pelas mesmas razões. Segue-se a matrix de avaliações para um conjunto limitado de pessoas e filmes:
+
+
+No que diz respeito à previsão das classificações por parte dos utilizadores recorremos apenas aos algoritmos de UBCF e IBCF, visto que os restantes (Popularidade e Regras de Associação), não são válidos no que concerne aos objetivos desta tarefa. Os parâmetros utilizados são, portanto, iguais aos utilizados na recomendação de filmes, pelos mesmos motivos explicados anteriormente. Na figura abaixo podemos observar a matriz de avaliações para um conjunto limitado de pessoas e filmes.
 
 ```{r echo=FALSE}
 rm <- as(as.data.frame(ratings), "realRatingMatrix")
-plot(image(rm[100:200,100:200], cuts=8, colorkey=T, col=topo.colors(10)))
 ```
 
-
-Para fazer a avalição dos modelos gerados, definimos que o conceito de uma boa pontuação é um valor maior ou igual a 3,0. Os dados de treino, classificações dadas e parâmetros dos modelos são iguais aos da recomendações de filmes. 
-
-Os resultados obtidos foram:
+```{r eval=FALSE, include=FALSE}
+png(filename = './extra/rm.png')
+image(rm[1150:1300,0:150], cuts=8, colorkey=T, col=topo.colors(10))
+dev.off()
+```
 
 ```{r echo=FALSE}
+img <- readPNG('./extra/rm.png')
+grid::grid.raster(img)
+```
+
+Relativamente à avaliação dos modelos gerados, considerámos como sendo uma boa pontuação valores iguais ou superiores a três, tendo em conta que os dados de treino, classificações dadas e parâmetros dos modelos são iguais aos dados das recomendações de filmes. Podemos observar, portanto, os resultados obtidos, na próxima figura.
+
+```{r eval=FALSE, include=FALSE}
 l <- eval_real_func(rm, 0.80, 3, 3)
+
+png(filename = './extra/rm_results.png')
+
 par(mfrow=c(1,2))
 plot(l$res,"ROC" ,annotate=c("1","2","3"))
 plot(l$res,"prec/rec" ,annotate=c("1","2","3"))
+
+dev.off()
 rm(rm,l)
 ```
 
-Avaliar
+```{r echo=FALSE}
+img <- readPNG('./extra/rm_results.png')
+grid::grid.raster(img)
+```
 
-
+No que toca à previsão dos ratings, mais uma vez, o modelo UBCF destacou-se em comparação ao IBCF, apresentando os melhores resultados de *precision* e *recall* à medida que as recomendações aumentam. Por outro lado, observando o comportamento do algoritmo IBCF, reparamos que a métrica *precision* diminui à medida que aumentam as recomendações, apesar do *recall* ser muito semelhante em todos os casos. Relativamente aos valores obtidos em TPR e FPR, ambas as métricas aumentam nos dois modelos, à medida que aumenta o número de recomendações, no entanto o aumento no TPR é mais significativo no UBCF do que no IBCF. 
 
 ## Com contexto
-Nesta secção, filtramos os dados usados nos modelos às categorias mais predominantes de cada género de pessoa. No nosso caso, estas categorias são os utilizadores com 15 a 20 anos em ambos os géneros. Também experimentámos apenas para a idade equivalente a 15 a 20 anos. Os parametros usados são os mesmos da secção anterior, sendo que a única diferença é de facto o contexto dos dados. Assim, o objetivo desta secção é observar se existe mudança na *performance* dos modelos com esta alteração.
+
+Tendo agora em conta características relevantes de cada utilizador, filtrámos os dados utilizados nos modelos para aferir novos resultados. Neste caso, considerámos como sendo as características mais relevantes a idade e género dos utilizadores sendo o intervalo predominante compreendido entre quinze a vinte anos em ambos os géneros e ainda tendo em conta apenas o intervalo referido da idade, isto é, ignorando o género. Já nos parâmetros, uma vez consideramos agora atributos relevantes dos utilizadores, aumentámos o valor de *nearest-neighbours* para cinco. Assim, o objetivo passa por observar possíveis mudanças na performance dos modelos, atendendo às alterações efetuadas.
+
 ### Recomendações de filmes
 
-Primeiro, observamos para a idade mais predominante, os 15 a 20 anos. Os resultados são:
+Observamos, deste modo, os resultados obtidos tendo em conta apenas o intervalo de idades entre quinze a vinte anos. 
 
-```{r echo=FALSE}
+```{r include=FALSE}
 users <- filter(profiles, agegroup == 15 )$userid
 bm <- as(as.data.frame(filter(ratings, userid %in% users)), "binaryRatingMatrix")
 
-l <- eval_real_func(bm, 0.80, 5, 5)
+l <- eval_binary_func(bm, 0.80, 5, 5)
+
+```
+
+```{r echo=FALSE}
 par(mfrow=c(1,2))
 plot(l$res,"ROC" ,annotate=c("1","2","3"))
 plot(l$res,"prec/rec" ,annotate=c("1","2","3"))
 
 rm(bm,l,users)
-
 ```
 
-Avaliar
+Os resultados destes modelos mostraram-se muito semelhantes aos observados aquando da aplicação dos mesmos excluindo a consideração de contexto, ainda assim o TPR mostrou-se mais alto. 
 
-Aqui, para pessoas do género feminino é com a idade entre 15 a 20 anos:
-```{r echo=FALSE}
+De seguida, apresentamos os resultados aplicados ao mesmo intervalo de idades, mas tendo em conta, agora, o género feminino.
+
+```{r include=FALSE}
 users <- filter(profiles, agegroup == 15 & gender == "Female")$userid
 bm <- as(as.data.frame(filter(ratings, userid %in% users)), "binaryRatingMatrix")
 
 l <- eval_binary_func(bm, 0.8, 5, 5)
+```
+
+```{r echo=FALSE}
 par(mfrow=c(1,2))
 plot(l$res,"ROC" ,annotate=c("1","2","3"))
 plot(l$res,"prec/rec" ,annotate=c("1","2","3"))
 
 rm(bm,l,users)
-
 ```
 
-Avaliar
+Já considerando o género feminino, os valores voltam a assemelhar-se aos obtidos nas recomendações sem contexto.
 
+Finalmente, obtemos os resultados concernentes de novo ao mesmo intervalo de idades, mas para os utilizadores de género masculino. 
 
-Finalmente, para os utilizadores masculinos de 15 a 20 anos:
-
-```{r echo=FALSE}
+```{r include=FALSE}
 users <- filter(profiles, agegroup == 15 & gender == "Male")$userid
 bm <- as(as.data.frame(filter(ratings, userid %in% users)), "binaryRatingMatrix")
 
-l <- eval_real_func(bm, 0.80, 5, 5)
+l <- eval_binary_func(bm, 0.80, 5, 5)
+
+```
+
+```{r echo=FALSE}
 par(mfrow=c(1,2))
 plot(l$res,"ROC" ,annotate=c("1","2","3"))
 plot(l$res,"prec/rec" ,annotate=c("1","2","3"))
 
 rm(bm,l,users)
-
 ```
 
-Avaliar
+Concluindo com a análise feita, considerando o género masculino, notamos agora uma melhoria nas métricas obtidas, especialmente na *precision* que se mostrou aproximadamente dez vezes mais alta que no caso das mulheres. 
 
 
 # Conclusão
 
-Nunca mais trabalhar em R.
+Após o término deste projeto tornou-se claro que o modelo UBCF é o que apresenta os melhores resultados, para o problema proposto. Podemos também concluir que, de facto, usar os atributos dos utilizadores como contexto tende a amplificar a eficácia dos resultados. 
+
+Relativamente à filtragem de dados que efetivámos, desconsiderámos as datas que separam os ratings, uma vez que os mesmos apresentam um intervalo de três anos, o qual considerámos pouco relevante. Ainda assim, sentimos que teria sido proveitoso realizar uma análise com uma maior quantidade de dados, no entanto, o hardware disponível não se mostrou capaz de executar os modelos em tempo útil.
+
+Um dos tópicos não abordados foi a verificação da eficácia dos modelos construídos para um grupo específico, ainda assim trata-se de algo que futuramente iremos testar.
 
 
 

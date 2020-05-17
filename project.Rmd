@@ -189,10 +189,10 @@ ggplot(movie_count, aes(n, nn)) +
 
 ratings <- ratings %>% group_by(userid) %>% filter(n() >= 10 & n() <= 32)
 ```
-Como queremos gerar recomendações a um grupo que vai tirar melhor proveito delas, retir  
+Como queremos gerar recomendações a um grupo que vai tirar melhor proveito delas, retiramos utilizadores com mais de 32 ratings. E, de forma a ter contexto suficiente para poder gerar recomendações relevante, definimos que cada utilizador tem que ter pelo menos 10 classificações.
 
 
-
+Os nossos dados processados são os seguintes
 ```{r echo=FALSE}
 
 valid_users <- as.data.frame(unique(ratings$userid))
@@ -202,26 +202,34 @@ colnames(valid_movies)[1] <- "movieid"
 profiles <- merge(profiles, valid_users, by="userid")
 movies <- merge(movies, valid_movies, by="movieid")
 
-
-print(paste("Nº de utilizadores",nrow(valid_users)))
 print(paste("Nº de filmes",nrow(valid_movies)))
 
+
+print(paste("Nº de utilizadores",nrow(valid_users)))
 ggplot(profiles, aes(agegroup)) +
   geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(agegroup)))  +
   guides(fill=guide_legend(title="Idade")) +
   scale_y_continuous(labels=scales::percent) +
   labs(title="Idade dos utilizadores por género (processado)", x="Idade", y="% de Utilizadores") +
   facet_grid(~gender)
+
+
+print(paste("Nº de avaliações",nrow(ratings)))
+ggplot(ratings, aes(rating)) +
+  geom_bar(aes(y = (..count..)/sum(..count..), fill = factor(rating)), width=0.4)  +
+  guides(fill=guide_legend(title="Avaliação")) +
+  scale_y_continuous(labels=scales::percent) +
+  labs(title="Avaliações (processado)", x="Classificação", y="% de Avaliações")
 ```
 
 
 
 
 
-# Modelos
+# Sitemas de Recomendação
+Explicar esta funcao
 
-
-```{r eval=FALSE, include=FALSE}
+```{r echo=FALSE}
 eval_binary_func <- function(mat, train, given, nn) {
   es <- evaluationScheme(mat, method="split", train=train, given=given)
 
@@ -232,11 +240,11 @@ eval_binary_func <- function(mat, train, given, nn) {
   models <- list(
     pop_model = list(name = "POPULAR"),
     ar_model = list(name = "AR", param = ar_params),
-    ucf_model = list(name = "UBCF", parameter = ucf_params),
-    icf_model = list(name = "IBCF", parameter = icf_params))
+    ubcf_model = list(name = "UBCF", parameter = ucf_params),
+    ibcf_model = list(name = "IBCF", parameter = icf_params))
 
   res <- evaluate(x = es, method = models, type="topNList", n = c(1,2,5))
-  return(res)
+  return(list("eval"=es, "res"=res))
 }
 
 eval_real_func <- function(mat, train, given, nn) {
@@ -246,42 +254,53 @@ eval_real_func <- function(mat, train, given, nn) {
   icf_params <- list(method = "cosine", k=nn)
 
   models <- list(
-    ucf_model = list(name = "UBCF", parameter = ucf_params),
-    icf_model = list(name = "IBCF", parameter = icf_params))
+    ubcf_model = list(name = "UBCF", parameter = ucf_params),
+    ibcf_model = list(name = "IBCF", parameter = icf_params))
 
   res <- evaluate(x = es, method = models, type="topNList", n = c(1,2,5))
-  return(res)
+  return(list("eval"=es, "res"=res))
 }
 ```
 
-## Sem contexto
 
+## Sem contexto
+Sem levar em conta as caracteristicas das pessoas, criamos a matrix binária correlacionando os utilizadores e os filmes.
 ```{r eval=FALSE, include=FALSE}
 bm <- as(as.data.frame(ratings), "binaryRatingMatrix")
-
 image(bm)
 ```
 
 
-```{r eval=FALSE, include=FALSE}
-res <- eval_binary_func(bm, 0.80, 5, 5)
-print(avg(res))
+Para gerar recomendações de filmes, usamos 4 algoritmos: Popularidade, Regras de Associação, User-Based CF, Item-Based CF.
+Para as regras de associação usámos um suporte de 0.01, pois evitar a escassez de regras. Mas definimos a confiança a 0.8 para as garantir que as regras geradas fossem fiáveis. Definimos também o comprimento máximo das regras a 5, porque temos um mínimo de 10 filmes avaliados por pessoa e vão ser recomendados no máximo 5 filmes.
+Nos algoritmos UBCF e IBCF, definimos os nearest-neighbours a 5. Não escolhemos um número mais alto para os algoritmos não fazerem recomendações com vizinhos que, na verdade, não são assim tão semelhantes.
+```{r echo=FALSE}
+l <- eval_binary_func(bm, 0.80, 5, 5)
+#print(avg(l$res))
 ```
 
-avaliar
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+plot(l$res,"ROC" ,annotate=c("1","2","3"))
+plot(l$res,"prec/rec" ,annotate=c("1","2","3"))
+```
 
 
-```{r eval=FALSE, include=FALSE}
+
+
+```{r echo=FALSE}
 rm <- as(as.data.frame(ratings), "realRatingMatrix")
 
-image(rm[1:100,2000:2100], cuts=8, colorkey=T, col=topo.colors(10))
+image(rm[100:200,100:200], cuts=8, colorkey=T, col=topo.colors(10))
 ```
 
 
 
 ```{r eval=FALSE, include=FALSE}
-res <- eval_real_func(bm, 0.80, 5, 5)
-print(avg(res))
+l <- eval_real_func(bm, 0.80, 5, 5)
+par(mfrow=c(1,2))
+plot(l$res,"ROC" ,annotate=c("1","2","3"))
+plot(l$res,"prec/rec" ,annotate=c("1","2","3"))
 
 ```
 
@@ -290,6 +309,7 @@ avaliar
 
 
 ## Com contexto
+
 ```{r eval=FALSE, include=FALSE}
 users <- filter(profiles, agegroup == 15 )$userid
 bm <- as(as.data.frame(filter(ratings, userid %in% users)), "binaryRatingMatrix")
@@ -320,6 +340,18 @@ print(avg(res))
 ```
 
 
+```{r}
+piggy <- sample((filter(ratings, !(userid %in% l$eval@runsTrain)))$userid,1)
+user_movies <- (filter(ratings, userid == piggy)$movieid)
+user_movies <- as.character(user_movies)
+activeuser <- matrix(0, 1, ncol=length(unique(ratings$movieid)), 
+                      dimnames = list(piggy, unique(ratings$movieid)))
+
+activeuser[1, user_movies] <- 1
+
+
+
+```
 
 
 
